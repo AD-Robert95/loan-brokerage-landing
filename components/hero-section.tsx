@@ -54,10 +54,32 @@ export function HeroSection() {
             <br />
             맞춤형 대출 솔루션
           </h1>
-          <p className="text-lg md:text-xl opacity-90 max-w-lg">
+          <p className="text-lg md:text-xl opacity-90 max-w-lg mb-8">
             대출브라더스대부중개와 함께 최적의 대출 상품을 찾아보세요. 전문 중개사가 고객님의 상황에 맞는 최고의 조건을 제안해
             드립니다.
           </p>
+          
+          {/* Loan Information Table */}
+          <div className="w-full max-w-lg">
+            <div className="grid grid-cols-2 gap-4 text-white">
+              <div className="border-b border-white/20 pb-2">
+                <div className="text-sm opacity-80">대출 자격</div>
+                <div className="font-medium">경제활동 가능한자</div>
+              </div>
+              <div className="border-b border-white/20 pb-2">
+                <div className="text-sm opacity-80">대출 한도</div>
+                <div className="font-medium">최대 1000만원</div>
+              </div>
+              <div className="border-b border-white/20 pb-2">
+                <div className="text-sm opacity-80">대출 금리</div>
+                <div className="font-medium">9 ~ 19.9%</div>
+              </div>
+              <div className="border-b border-white/20 pb-2">
+                <div className="text-sm opacity-80">상환 기간</div>
+                <div className="font-medium">최대 60개월</div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Consultation Form */}

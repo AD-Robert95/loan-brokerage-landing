@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { Header } from "@/components/header"
 import { HeroSection } from "@/components/hero-section"
 import { LoanEligibilitySection } from "@/components/loan-eligibility-section"
@@ -12,10 +12,17 @@ import { Footer } from "@/components/footer"
 import { BottomConsultationBar } from "@/components/bottom-consultation-bar"
 import { PrivacyPolicyModal } from "@/components/privacy-policy-modal"
 import { TestimonialsSection } from "@/components/testimonials-section"
+import { motion } from "framer-motion"
 
-export default function Home() {
-  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false)
-  const [activeSection, setActiveSection] = useState("hero")
+export default function Home(): React.ReactElement {
+  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState<boolean>(false)
+  const [activeSection, setActiveSection] = useState<string>("hero")
+
+  // Animation variants
+  const fadeInUp = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.6 } }
+  }
 
   useEffect(() => {
     const handleScroll = () => {
@@ -28,7 +35,7 @@ export default function Home() {
         { id: "partners", element: document.getElementById("partners") },
       ]
 
-      const scrollPosition = window.scrollY + 100 // Offset for header
+      const scrollPosition = window.scrollY + 100
 
       for (let i = sections.length - 1; i >= 0; i--) {
         const section = sections[i]
@@ -47,13 +54,68 @@ export default function Home() {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header activeSection={activeSection} />
       <main className="flex-1 pt-16">
-        <HeroSection />
-        <LoanEligibilitySection />
-        <LoanProcessSection />
-        <TestimonialsSection />
-        <FaqSection />
-        <RealTimeBanner />
-        <PartnerInstitutions />
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          variants={fadeInUp}
+        >
+          <HeroSection />
+        </motion.div>
+
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          variants={fadeInUp}
+        >
+          <LoanEligibilitySection />
+        </motion.div>
+
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          variants={fadeInUp}
+        >
+          <LoanProcessSection />
+        </motion.div>
+
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          variants={fadeInUp}
+        >
+          <TestimonialsSection />
+        </motion.div>
+
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          variants={fadeInUp}
+        >
+          <FaqSection />
+        </motion.div>
+
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          variants={fadeInUp}
+        >
+          <RealTimeBanner />
+        </motion.div>
+
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          variants={fadeInUp}
+        >
+          <PartnerInstitutions />
+        </motion.div>
       </main>
       <Footer />
       <BottomConsultationBar onOpenPrivacyPolicy={() => setIsPrivacyModalOpen(true)} />

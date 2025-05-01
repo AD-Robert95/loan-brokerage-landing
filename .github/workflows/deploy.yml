@@ -10,9 +10,13 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: Production
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -25,6 +29,8 @@ jobs:
           echo "Node version: $(node -v)"
           echo "NPM version: $(npm -v)"
           echo "Working directory: $(pwd)"
+          echo "Repository: ${{ github.repository }}"
+          echo "Ref: ${{ github.ref }}"
           ls -la
           
       - name: Install dependencies
@@ -33,17 +39,19 @@ jobs:
           npm list --depth=0
         
       - name: Build project
-        run: npm run build
+        run: |
+          echo "Starting build..."
+          npm run build
+          echo "Build completed"
+          ls -la .next
+        
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+        
+      - name: Pull Vercel Environment Information
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
         
       - name: Deploy to Vercel
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          working-directory: ./
-          vercel-args: '--prod' 
+        run: |
+          echo "Deploying to Vercel..."
+          vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} 

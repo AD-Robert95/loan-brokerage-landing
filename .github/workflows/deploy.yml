@@ -25,20 +25,15 @@ jobs:
           node-version: '20'
           cache: 'npm'
           
-      - name: Install Vercel CLI
-        run: npm install -g vercel@latest
-          
-      - name: Pull Vercel Environment Information
-        run: vercel pull --yes --environment=production
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_GITHUB_ACTION }}
-          
-      - name: Build Project Artifacts
-        run: vercel build --prod
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_GITHUB_ACTION }}
-          
-      - name: Deploy Project Artifacts to Vercel
-        run: vercel deploy --prebuilt --prod
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_GITHUB_ACTION }} 
+      - name: Install Dependencies
+        run: npm install
+        
+      - name: Deploy to Vercel
+        uses: vercel/actions-deploy@v1
+        with:
+          token: ${{ secrets.VERCEL_GITHUB_ACTION }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          github-comment: true
+          working-directory: ./ 

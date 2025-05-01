@@ -10,48 +10,30 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: Production
     
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-          
-      - name: Print debug info
-        run: |
-          echo "Node version: $(node -v)"
-          echo "NPM version: $(npm -v)"
-          echo "Working directory: $(pwd)"
-          echo "Repository: ${{ github.repository }}"
-          echo "Ref: ${{ github.ref }}"
-          ls -la
-          
-      - name: Install dependencies
-        run: |
-          npm ci
-          npm list --depth=0
+
+      - name: Install Dependencies
+        run: npm install --legacy-peer-deps
         
-      - name: Build project
-        run: |
-          echo "Starting build..."
-          npm run build
-          echo "Build completed"
-          ls -la .next
-        
-      - name: Install Vercel CLI
-        run: npm install --global vercel@latest
-        
-      - name: Pull Vercel Environment Information
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_BASE_URL: ${{ secrets.NEXT_PUBLIC_BASE_URL }}
         
       - name: Deploy to Vercel
-        run: |
-          echo "Deploying to Vercel..."
-          vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} 
+        uses: vercel/actions-deploy@v1
+        with:
+          token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-args: '--prod'
+          working-directory: ./ 

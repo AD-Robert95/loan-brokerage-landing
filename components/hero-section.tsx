@@ -10,7 +10,11 @@ const heroImages = [
   "/hero/hero3.jpg"
 ]
 
-export function HeroSection() {
+interface HeroSectionProps {
+  onSubmit: (data: { name: string; phone: string; amount: number }) => Promise<{ success: boolean; error?: unknown }>
+}
+
+export function HeroSection({ onSubmit }: HeroSectionProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
 
   useEffect(() => {
@@ -20,6 +24,24 @@ export function HeroSection() {
 
     return () => clearInterval(interval)
   }, [])
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
+    const data = {
+      name: formData.get('name') as string,
+      phone: formData.get('phone') as string,
+      amount: Number(formData.get('amount'))
+    }
+    
+    const result = await onSubmit(data)
+    if (result.success) {
+      alert('상담 신청이 완료되었습니다.')
+      e.currentTarget.reset()
+    } else {
+      alert('상담 신청 중 오류가 발생했습니다.')
+    }
+  }
 
   return (
     <section id="hero" className="relative min-h-[600px] md:min-h-[700px] overflow-hidden">
@@ -84,7 +106,7 @@ export function HeroSection() {
 
         {/* Consultation Form */}
         <div className="w-full md:w-5/12 lg:w-4/12">
-          <LoanConsultationForm />
+          <LoanConsultationForm onSubmit={handleSubmit} />
         </div>
       </div>
 

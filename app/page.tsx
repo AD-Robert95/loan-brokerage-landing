@@ -9,41 +9,55 @@ import { LoanProcessSection } from "@/components/loan-process-section"
 import { RealTimeBanner } from "@/components/real-time-banner"
 import { PartnerInstitutions } from "@/components/partner-institutions"
 import { Footer } from "@/components/footer"
-import { BottomConsultationBar } from "@/components/bottom-consultation-bar"
 import { PrivacyPolicyModal } from "@/components/privacy-policy-modal"
 import { TestimonialsSection } from "@/components/testimonials-section"
 import { motion } from "framer-motion"
+import { supabase } from '@/lib/supabase'
+
+const fadeInUp = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0 }
+}
+
+// 리드 데이터 인터페이스
+interface Lead {
+  name: string
+  phone: string
+  amount: number
+}
 
 export default function Home(): React.ReactElement {
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState<boolean>(false)
   const [activeSection, setActiveSection] = useState<string>("hero")
 
-  // Animation variants
-  const fadeInUp = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.6 } }
+  // 리드 데이터 저장 함수
+  const insertLead = async (payload: Lead) => {
+    try {
+      const { error } = await supabase.from("leads").insert(payload)
+      if (error) throw error
+      return { success: true }
+    } catch (error) {
+      console.error('Error inserting lead:', error)
+      return { success: false, error }
+    }
   }
 
   useEffect(() => {
     const handleScroll = () => {
-      const sections = [
-        { id: "hero", element: document.getElementById("hero") },
-        { id: "eligibility", element: document.getElementById("eligibility") },
-        { id: "process", element: document.getElementById("process") },
-        { id: "testimonials", element: document.getElementById("testimonials") },
-        { id: "faq", element: document.getElementById("faq") },
-        { id: "partners", element: document.getElementById("partners") },
-      ]
+      const sections = ["hero", "eligibility", "process", "testimonials", "faq", "realtime", "partners"]
+      let currentSection = sections[0]
 
-      const scrollPosition = window.scrollY + 100
-
-      for (let i = sections.length - 1; i >= 0; i--) {
-        const section = sections[i]
-        if (section.element && scrollPosition >= section.element.offsetTop) {
-          setActiveSection(section.id)
-          break
+      for (const section of sections) {
+        const element = document.getElementById(section)
+        if (element) {
+          const rect = element.getBoundingClientRect()
+          if (rect.top <= 100) {
+            currentSection = section
+          }
         }
       }
+
+      setActiveSection(currentSection)
     }
 
     window.addEventListener("scroll", handleScroll)
@@ -55,24 +69,27 @@ export default function Home(): React.ReactElement {
       <Header activeSection={activeSection} />
       <main className="flex-1 pt-16">
         <motion.div
+          id="hero"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
           variants={fadeInUp}
         >
-          <HeroSection />
+          <HeroSection onSubmit={insertLead} />
         </motion.div>
 
         <motion.div
+          id="eligibility"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
           variants={fadeInUp}
         >
-          <LoanEligibilitySection />
+          <LoanEligibilitySection onSubmit={insertLead} />
         </motion.div>
 
         <motion.div
+          id="process"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
@@ -82,6 +99,7 @@ export default function Home(): React.ReactElement {
         </motion.div>
 
         <motion.div
+          id="testimonials"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
@@ -91,6 +109,7 @@ export default function Home(): React.ReactElement {
         </motion.div>
 
         <motion.div
+          id="faq"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
@@ -100,6 +119,7 @@ export default function Home(): React.ReactElement {
         </motion.div>
 
         <motion.div
+          id="realtime"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
@@ -109,6 +129,7 @@ export default function Home(): React.ReactElement {
         </motion.div>
 
         <motion.div
+          id="partners"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
@@ -118,7 +139,6 @@ export default function Home(): React.ReactElement {
         </motion.div>
       </main>
       <Footer />
-      <BottomConsultationBar onOpenPrivacyPolicy={() => setIsPrivacyModalOpen(true)} />
       <PrivacyPolicyModal isOpen={isPrivacyModalOpen} onClose={() => setIsPrivacyModalOpen(false)} />
     </div>
   )

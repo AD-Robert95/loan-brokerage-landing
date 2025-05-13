@@ -29,6 +29,7 @@ export function LoanConsultationForm({ onSubmit }: LoanConsultationFormProps) {
   const [otp, setOtp] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [phoneForOtp, setPhoneForOtp] = useState("");
+  const [isPhoneVerified, setIsPhoneVerified] = useState(false);
   const { register, handleSubmit, reset, formState: { errors }, getValues, setValue } = useForm<LoanFormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -38,6 +39,11 @@ export function LoanConsultationForm({ onSubmit }: LoanConsultationFormProps) {
   });
 
   const handleFormSubmit = async (data: LoanFormData) => {
+    if (!isPhoneVerified) {
+      toast.error('전화번호 인증이 필요합니다.');
+      return;
+    }
+    
     setIsSubmitting(true);
     try {
       const formattedData: LoanFormData = {
@@ -51,6 +57,11 @@ export function LoanConsultationForm({ onSubmit }: LoanConsultationFormProps) {
       if (result.success) {
         toast.success('상담 신청이 완료되었습니다.');
         reset();
+        // 인증 상태 초기화
+        setSmsSent(false);
+        setOtp("");
+        setPhoneForOtp("");
+        setIsPhoneVerified(false);
       } else {
         throw new Error('상담 신청 중 오류가 발생했습니다.');
       }
@@ -89,19 +100,26 @@ export function LoanConsultationForm({ onSubmit }: LoanConsultationFormProps) {
   const handleVerifyOtp = async () => {
     if (!otp || !phoneForOtp) return;
     setVerifying(true);
-    const res = await fetch("/api/sms", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone: phoneForOtp, code: otp }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      toast.success("인증 성공");
-      setValue("phone_number", phoneForOtp); // 폼에 인증된 번호 반영
-    } else {
-      toast.error(data.error || "인증 실패");
+    try {
+      const res = await fetch("/api/sms", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phoneForOtp, code: otp }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("인증 성공");
+        setValue("phone_number", phoneForOtp); // 폼에 인증된 번호 반영
+        setIsPhoneVerified(true); // 인증 상태 업데이트
+      } else {
+        toast.error(data.error || "인증 실패");
+      }
+    } catch (error) {
+      toast.error("인증 처리 중 오류가 발생했습니다.");
+      console.error("인증 오류:", error);
+    } finally {
+      setVerifying(false);
     }
-    setVerifying(false);
   };
 
   return (
@@ -127,14 +145,25 @@ export function LoanConsultationForm({ onSubmit }: LoanConsultationFormProps) {
             className={`h-12 text-base ${errors.phone_number ? 'border-red-500' : ''}`}
             disabled={smsSent}
           />
-          <Button type="button" onClick={handleSendSms} disabled={verifying || smsSent} className="mt-2 w-full">
-            {verifying ? '발송중...' : smsSent ? '인증번호 발송됨' : '인증번호 받기'}
+          <Button 
+            type="button" 
+            onClick={handleSendSms} 
+            disabled={verifying || smsSent || isPhoneVerified} 
+            className="mt-2 w-full"
+          >
+            {verifying 
+              ? '발송중...' 
+              : isPhoneVerified 
+                ? '인증완료' 
+                : smsSent 
+                  ? '인증번호 발송됨' 
+                  : '인증번호 받기'}
           </Button>
           {errors.phone_number && (
             <p className="text-red-500 text-sm mt-1">{errors.phone_number.message}</p>
           )}
         </div>
-        {smsSent && (
+        {smsSent && !isPhoneVerified && (
           <div>
             <InputOTP maxLength={6} value={otp} onChange={setOtp} className="mb-2" disabled={verifying}>
               <InputOTPGroup>
@@ -146,6 +175,14 @@ export function LoanConsultationForm({ onSubmit }: LoanConsultationFormProps) {
             <Button type="button" onClick={handleVerifyOtp} disabled={verifying || otp.length !== 6} className="w-full">
               {verifying ? '인증중...' : '인증하기'}
             </Button>
+          </div>
+        )}
+        {isPhoneVerified && (
+          <div className="bg-green-50 text-green-600 p-2 rounded-md text-sm flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            전화번호 인증이 완료되었습니다.
           </div>
         )}
         <div>

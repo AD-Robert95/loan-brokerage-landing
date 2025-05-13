@@ -11,6 +11,7 @@ import { PartnerInstitutions } from "@/components/partner-institutions"
 import { Footer } from "@/components/footer"
 import { PrivacyPolicyModal } from "@/components/privacy-policy-modal"
 import { TestimonialsSection } from "@/components/testimonials-section"
+import { BottomConsultationBar } from "@/components/bottom-consultation-bar"
 import { motion } from "framer-motion"
 import { validateAndInsertLead } from '@/lib/supabase'
 import type { LoanFormData, LoanResponse } from '@/types/loan'
@@ -104,7 +105,7 @@ export default function Home(): React.ReactElement {
           viewport={{ once: true, margin: "-100px" }}
           variants={fadeInUp}
         >
-          <LoanEligibilitySection onSubmit={insertLead} />
+          <LoanEligibilitySection />
         </motion.div>
 
         <motion.div
@@ -157,6 +158,7 @@ export default function Home(): React.ReactElement {
           <PartnerInstitutions />
         </motion.div>
       </main>
+      <BottomConsultationBar onOpenPrivacyPolicy={() => setIsPrivacyModalOpen(true)} />
       <Footer />
       <PrivacyPolicyModal isOpen={isPrivacyModalOpen} onClose={() => setIsPrivacyModalOpen(false)} />
     </div>

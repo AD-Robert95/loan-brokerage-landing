@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import { LoanConsultationForm } from "@/components/loan-consultation-form"
+import type { LoanFormData, LoanResponse } from "@/types/loan"
 
 const heroImages = [
   "/hero/hero1.jpg",
@@ -11,7 +12,7 @@ const heroImages = [
 ]
 
 interface HeroSectionProps {
-  onSubmit: (data: { name: string; phone: string; amount: number }) => Promise<{ success: boolean; error?: unknown }>
+  onSubmit: (data: LoanFormData) => Promise<LoanResponse>
 }
 
 export function HeroSection({ onSubmit }: HeroSectionProps) {
@@ -25,20 +26,15 @@ export function HeroSection({ onSubmit }: HeroSectionProps) {
     return () => clearInterval(interval)
   }, [])
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    const formData = new FormData(e.currentTarget)
-    const data = {
-      name: formData.get('name') as string,
-      phone: formData.get('phone') as string,
-      amount: Number(formData.get('amount'))
-    }
-    
-    const result = await onSubmit(data)
-    if (result.success) {
-      alert('상담 신청이 완료되었습니다.')
-      e.currentTarget.reset()
-    } else {
+  const handleSubmit = async (data: LoanFormData) => {
+    try {
+      const result = await onSubmit(data)
+      if (result.success) {
+        alert('상담 신청이 완료되었습니다.')
+      } else {
+        alert('상담 신청 중 오류가 발생했습니다.')
+      }
+    } catch (error) {
       alert('상담 신청 중 오류가 발생했습니다.')
     }
   }

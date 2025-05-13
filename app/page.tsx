@@ -12,18 +12,13 @@ import { Footer } from "@/components/footer"
 import { PrivacyPolicyModal } from "@/components/privacy-policy-modal"
 import { TestimonialsSection } from "@/components/testimonials-section"
 import { motion } from "framer-motion"
-import { supabase } from '@/lib/supabase'
+import { validateAndInsertLead } from '@/lib/supabase'
+import type { LoanFormData, LoanResponse } from '@/types/loan'
+import { toast } from "sonner"
 
 const fadeInUp = {
   hidden: { opacity: 0, y: 20 },
   visible: { opacity: 1, y: 0 }
-}
-
-// 리드 데이터 인터페이스
-interface Lead {
-  name: string
-  phone: string
-  amount: number
 }
 
 export default function Home(): React.ReactElement {
@@ -31,14 +26,38 @@ export default function Home(): React.ReactElement {
   const [activeSection, setActiveSection] = useState<string>("hero")
 
   // 리드 데이터 저장 함수
-  const insertLead = async (payload: Lead) => {
+  const insertLead = async (payload: LoanFormData): Promise<LoanResponse> => {
     try {
-      const { error } = await supabase.from("leads").insert(payload)
-      if (error) throw error
-      return { success: true }
+      console.log('데이터 제출 시작:', payload);
+      
+      // 타입 불일치를 방지하기 위한 데이터 전처리
+      const validatedPayload: LoanFormData = {
+        ...payload,
+        age: Number(payload.age),
+        loan_amount: Number(payload.loan_amount),
+        employed: typeof payload.employed === 'string' 
+          ? payload.employed === 'true' 
+          : Boolean(payload.employed)
+      };
+      
+      console.log('변환된 데이터:', validatedPayload);
+      
+      // 새로운 유틸리티 함수 사용
+      const result = await validateAndInsertLead(validatedPayload);
+      
+      if (!result.success) {
+        console.error('데이터 저장 실패:', result.error);
+        toast.error(`상담 신청 중 오류가 발생했습니다: ${result.error}`);
+        return result;
+      }
+      
+      toast.success('상담 신청이 완료되었습니다!');
+      return { success: true };
     } catch (error) {
-      console.error('Error inserting lead:', error)
-      return { success: false, error }
+      console.error('리드 데이터 저장 중 오류:', error);
+      const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다';
+      toast.error(`상담 신청 중 오류가 발생했습니다: ${errorMessage}`);
+      return { success: false, error };
     }
   }
 

@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 import '@/styles/globals.css'
+import '@/components/ui/button/styles.css'
+import '@/components/ui/card/styles.css'
 
 export const metadata: Metadata = {
   title: 'v0 App',

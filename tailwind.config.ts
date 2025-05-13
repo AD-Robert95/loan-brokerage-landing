@@ -11,6 +11,16 @@ const config: Config = {
     "./styles/**/*.{js,ts,jsx,tsx,mdx}",
     "*.{js,ts,jsx,tsx,mdx}"
   ],
+  safelist: [
+    'bg-background',
+    'min-h-screen',
+    'font-sans',
+    'antialiased',
+    'fixed',
+    'bottom-0',
+    'w-full',
+    'z-50'
+  ],
   theme: {
   	extend: {
   		colors: {

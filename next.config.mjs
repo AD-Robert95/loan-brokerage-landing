@@ -10,7 +10,16 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  optimizeCss: false
+  optimizeCss: false,
+  experimental: {
+    optimizeFonts: false,
+    turbotrace: {
+      contextDirectory: process.cwd(),
+    },
+  },
+  generateBuildId: async () => {
+    return `build-${new Date().getTime()}`
+  },
 }
 
 export default nextConfig

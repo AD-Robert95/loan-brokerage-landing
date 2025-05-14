@@ -12,7 +12,18 @@ import type { Database } from '@/types/supabase';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
 const formSchema = z.object({
-  age: z.number().min(18, '나이를 입력해주세요'),
+  age: z.preprocess(
+    // 입력값을 숫자로 변환 시도
+    (val) => {
+      const processed = Number(val);
+      return isNaN(processed) ? undefined : processed;
+    },
+    // 숫자 검증 및 한글 오류 메시지 표시
+    z.number({
+      required_error: "나이를 입력해주세요",
+      invalid_type_error: "나이는 숫자만 기입해주세요"
+    }).min(18, '18세 이상 입력해주세요').max(100, '유효한 나이를 입력해주세요')
+  ),
   phone_number: z.string().regex(/^[0-9]{10,11}$/, '올바른 전화번호를 입력해주세요'),
   location: z.string().min(1, '지역을 입력해주세요'),
   loan_amount: z.number().min(1000000, '대출 금액을 입력해주세요'),
@@ -128,10 +139,20 @@ export function LoanConsultationForm({ onSubmit }: LoanConsultationFormProps) {
       <div className="space-y-4">
         <div>
           <Input
-            {...register('age', { valueAsNumber: true })}
-            type="number"
+            {...register('age', { 
+              valueAsNumber: true,
+              onChange: (e) => {
+                // 숫자만 허용하는 정규식으로 검증
+                const value = e.target.value;
+                if (value && !/^\d*$/.test(value)) {
+                  e.target.value = value.replace(/[^\d]/g, '');
+                }
+              }
+            })}
+            type="text"
             placeholder="나이 *"
             className={`h-12 text-base ${errors.age ? 'border-red-500' : ''}`}
+            maxLength={3}
           />
           {errors.age && (
             <p className="text-red-500 text-sm mt-1">{errors.age.message}</p>

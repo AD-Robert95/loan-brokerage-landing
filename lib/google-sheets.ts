@@ -86,7 +86,7 @@ export const appendLoanDataToSheet = async (
     const rowData = [
       data.id.toString(),
       data.age.toString(),
-      data.phone_number,
+      `'${data.phone_number}`,  // 앞에 '를 추가하여 문자열로 인식되도록 함
       data.location,
       data.loan_amount.toString(),
       data.employed ? 'O' : 'X',

@@ -13,7 +13,6 @@ import { PrivacyPolicyModal } from "@/components/privacy-policy-modal"
 import { TestimonialsSection } from "@/components/testimonials-section"
 import { BottomConsultationBar } from "@/components/bottom-consultation-bar"
 import { motion } from "framer-motion"
-import { validateAndInsertLead } from '@/lib/supabase'
 import type { LoanFormData, LoanResponse } from '@/types/loan'
 import { toast } from "sonner"
 
@@ -31,20 +30,16 @@ export default function Home(): React.ReactElement {
     try {
       console.log('데이터 제출 시작:', payload);
       
-      // 타입 불일치를 방지하기 위한 데이터 전처리
-      const validatedPayload: LoanFormData = {
-        ...payload,
-        age: Number(payload.age),
-        loan_amount: Number(payload.loan_amount),
-        employed: typeof payload.employed === 'string' 
-          ? payload.employed === 'true' 
-          : Boolean(payload.employed)
-      };
+      // API 엔드포인트 호출 (Supabase 삽입 + Google Sheets 연동)
+      const response = await fetch('/api/loan-submission', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
       
-      console.log('변환된 데이터:', validatedPayload);
-      
-      // 새로운 유틸리티 함수 사용
-      const result = await validateAndInsertLead(validatedPayload);
+      const result = await response.json();
       
       if (!result.success) {
         console.error('데이터 저장 실패:', result.error);

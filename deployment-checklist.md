@@ -95,4 +95,10 @@ vercel --prod --force
 | 3 | Preview 브랜치 배포 | 배포 전 실제 확인 |
 | 4 | main 병합 & GitHub 푸시 | Vercel 자동 배포 트리거 |
 | 5 | vercel --prod --force | 캐시 무시하고 새 빌드 |
-| 6 | 사이트 접속 & 기능 검수 | 실 배포 검증 | 
+| 6 | 사이트 접속 & 기능 검수 | 실 배포 검증 |
+
+## SEO 및 검색엔진 최적화 파일 관리
+
+- 본 프로젝트는 단일 SPA(Single Page Application) 구조이므로, sitemap.xml, robots.txt 등은 public 폴더에 정적으로 관리한다.
+- Next.js app/ 내 동적 라우트(route.ts) 방식은 사용하지 않는다.
+- 필요시 public/sitemap.xml, public/robots.txt 파일을 직접 작성 및 수정한다. 

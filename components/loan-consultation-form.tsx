@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -26,7 +26,17 @@ const formSchema = z.object({
   ),
   phone_number: z.string().regex(/^[0-9]{10,11}$/, '올바른 전화번호를 입력해주세요'),
   location: z.string().min(1, '지역을 입력해주세요'),
-  loan_amount: z.number().min(1000000, '대출 금액을 입력해주세요'),
+  loan_amount: z.preprocess(
+    // 입력값을 숫자로 변환 시도 (만원 단위를 원 단위로 변환)
+    (val) => {
+      const processed = Number(val);
+      return isNaN(processed) ? undefined : processed * 10000; // 만원 단위로 입력받아 원 단위로 변환
+    },
+    z.number({
+      required_error: "대출 금액을 입력해주세요",
+      invalid_type_error: "대출 금액은 숫자만 기입해주세요"
+    }).positive('대출 금액은 양수만 가능합니다').min(100, '최소 100만원 이상 입력해주세요')
+  ),
   employed: z.boolean(),
 });
 
@@ -41,13 +51,30 @@ export function LoanConsultationForm({ onSubmit }: LoanConsultationFormProps) {
   const [verifying, setVerifying] = useState(false);
   const [phoneForOtp, setPhoneForOtp] = useState("");
   const [isPhoneVerified, setIsPhoneVerified] = useState(false);
+  const [timer, setTimer] = useState(0); // 인증 타이머(초)
   const { register, handleSubmit, reset, formState: { errors }, getValues, setValue } = useForm<LoanFormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       employed: true,
-      loan_amount: 1000000,
+      loan_amount: 100,
     }
   });
+
+  // 인증 타이머 관리
+  useEffect(() => {
+    if (isPhoneVerified) {
+      setTimer(0);
+      setSmsSent(false);
+      return;
+    }
+    if (smsSent && timer > 0) {
+      const id = setInterval(() => setTimer((t) => t - 1), 1000);
+      return () => clearInterval(id);
+    }
+    if (timer === 0 && smsSent) {
+      setSmsSent(false);
+    }
+  }, [smsSent, timer, isPhoneVerified]);
 
   const handleFormSubmit = async (data: LoanFormData) => {
     if (!isPhoneVerified) {
@@ -100,6 +127,7 @@ export function LoanConsultationForm({ onSubmit }: LoanConsultationFormProps) {
     if (data.success) {
       setSmsSent(true);
       setPhoneForOtp(phone);
+      setTimer(180); // 3분 타이머 시작
       toast.success("인증번호가 발송되었습니다.");
     } else {
       toast.error(data.error || "문자 발송 실패");
@@ -169,17 +197,20 @@ export function LoanConsultationForm({ onSubmit }: LoanConsultationFormProps) {
           <Button 
             type="button" 
             onClick={handleSendSms} 
-            disabled={verifying || smsSent || isPhoneVerified} 
+            disabled={verifying || smsSent || isPhoneVerified || timer > 0} 
             className="mt-2 w-full"
           >
             {verifying 
               ? '발송중...' 
               : isPhoneVerified 
                 ? '인증완료' 
-                : smsSent 
-                  ? '인증번호 발송됨' 
+                : smsSent && timer > 0
+                  ? `재발송 (${Math.floor(timer / 60)}:${(timer % 60).toString().padStart(2, '0')})`
                   : '인증번호 받기'}
           </Button>
+          {timer > 0 && !isPhoneVerified && (
+            <p className="text-xs text-gray-500 mt-1">인증번호 유효시간: {Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, '0')}</p>
+          )}
           {errors.phone_number && (
             <p className="text-red-500 text-sm mt-1">{errors.phone_number.message}</p>
           )}
@@ -233,10 +264,20 @@ export function LoanConsultationForm({ onSubmit }: LoanConsultationFormProps) {
         </div>
         <div>
           <Input
-            {...register('loan_amount', { valueAsNumber: true })}
-            type="number"
-            placeholder="대출 희망금액 * (원)"
+            {...register('loan_amount', { 
+              valueAsNumber: true,
+              onChange: (e) => {
+                // 숫자만 허용하는 정규식으로 검증
+                const value = e.target.value;
+                if (value && !/^\d*$/.test(value)) {
+                  e.target.value = value.replace(/[^\d]/g, '');
+                }
+              }
+            })}
+            type="text"
+            placeholder="대출 희망금액 * (만원)"
             className={`h-12 text-base ${errors.loan_amount ? 'border-red-500' : ''}`}
+            maxLength={5} // 최대 99,999만원 (약 10억원)
           />
           {errors.loan_amount && (
             <p className="text-red-500 text-sm mt-1">{errors.loan_amount.message}</p>

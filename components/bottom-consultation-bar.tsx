@@ -42,12 +42,23 @@ export function BottomConsultationBar({ onOpenPrivacyPolicy }: BottomConsultatio
         ) : (
           <div className="h-16 flex items-center justify-between">
             <div className="text-sm md:text-base font-medium">빠른 상담이 필요하신가요?</div>
-            <button
-              onClick={() => setIsExpanded(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
-            >
-              상담 신청하기
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setIsExpanded(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm transition-colors"
+              >
+                상담 신청하기
+              </button>
+              <a
+                href="https://pf.kakao.com/_xdgxnvK/chat"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-[#FEE500] hover:bg-yellow-300 text-black px-4 py-2 rounded-md text-sm font-semibold flex items-center justify-center transition-colors border border-gray-200"
+                aria-label="카톡 문의"
+              >
+                카톡 문의
+              </a>
+            </div>
           </div>
         )}
       </div>

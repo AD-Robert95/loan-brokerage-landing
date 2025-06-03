@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import type { LoanFormData, LoanResponse } from '@/types/loan';
 import type { Database } from '@/types/supabase';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import { Loader2 } from "lucide-react";
 
 const formSchema = z.object({
   age: z.preprocess(
@@ -286,9 +287,16 @@ export function LoanConsultationForm({ onSubmit }: LoanConsultationFormProps) {
         <Button
           type="submit"
           disabled={isSubmitting}
-          className="w-full h-12 text-base font-semibold bg-blue-600 hover:bg-blue-700 text-white"
+          className="w-full h-12 text-base font-semibold bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center"
         >
-          {isSubmitting ? '처리중...' : '무료 상담 신청하기'}
+          {isSubmitting ? (
+            <>
+              <Loader2 className="animate-spin mr-2 h-5 w-5" />
+              상담 신청 중...
+            </>
+          ) : (
+            "무료 상담 신청하기"
+          )}
         </Button>
         <p className="text-sm text-gray-500 mt-2">
           개인정보는 상담 목적으로만 사용되며, 제3자에게 제공되지 않습니다.

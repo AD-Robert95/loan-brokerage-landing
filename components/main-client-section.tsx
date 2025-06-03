@@ -6,7 +6,6 @@ import { LoanEligibilitySection } from "@/components/loan-eligibility-section";
 import { LoanProcessSection } from "@/components/loan-process-section";
 import { RealTimeBanner } from "@/components/real-time-banner";
 import { PartnerInstitutions } from "@/components/partner-institutions";
-import { Footer } from "@/components/footer";
 import { PrivacyPolicyModal } from "@/components/privacy-policy-modal";
 import { TestimonialsSection } from "@/components/testimonials-section";
 import { BottomConsultationBar } from "@/components/bottom-consultation-bar";
@@ -98,8 +97,6 @@ export function MainClientSection() {
         </motion.div>
       </main>
       <BottomConsultationBar onOpenPrivacyPolicy={() => setIsPrivacyModalOpen(true)} />
-      <Footer />
-      <PrivacyPolicyModal isOpen={isPrivacyModalOpen} onClose={() => setIsPrivacyModalOpen(false)} />
     </>
   );
 } 

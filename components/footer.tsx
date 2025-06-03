@@ -47,6 +47,9 @@ export function Footer() {
               <span className="font-medium">소재지:</span> 경기도 성남시 수정구 금토로80번길 55, 판교 제2테크노밸리지
               원시설용지D4-01, GT센트럴판교 8층 808호 (금토동)
             </p>
+            <p className="mb-2">
+              <span className="font-medium">대표 전화번호:</span> 1668-0935
+            </p>
           </div>
           <div>
             <p className="mb-2">

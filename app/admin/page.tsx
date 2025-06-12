@@ -47,23 +47,51 @@ import { ko } from "date-fns/locale";
 // TODO: 로그인/권한 체크 후 접근 허용
 // TODO: DB 연동 시 getServerSideProps 또는 server component로 데이터 fetch
 
-// 목업 데이터
-const mockCounsels = [
-  {
-    id: "clxyz1",
-    name: "홍길동",
-    phone: "010-1234-5678",
-    createdAt: "2025-05-18T14:22:00.000Z",
-    status: "대기중",
-  },
-  {
-    id: "clxyz2",
-    name: "김철수",
-    phone: "010-2345-6789",
-    createdAt: "2025-05-17T10:11:00.000Z",
-    status: "상담완료",
-  },
-];
+// 목업 데이터 (현재 날짜 기준으로 생성)
+const generateMockData = () => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  return [
+    {
+      id: "clxyz1",
+      name: "홍길동",
+      phone: "010-1234-5678",
+      createdAt: new Date(today.getTime() - (2 * 60 * 60 * 1000)).toISOString(), // 오늘 2시간 전
+      status: "대기중",
+    },
+    {
+      id: "clxyz2",
+      name: "김철수",
+      phone: "010-2345-6789",
+      createdAt: new Date(today.getTime() - (24 * 60 * 60 * 1000)).toISOString(), // 어제
+      status: "상담완료",
+    },
+    {
+      id: "clxyz3",
+      name: "박영희",
+      phone: "010-3456-7890",
+      createdAt: new Date(today.getTime() - (6 * 60 * 60 * 1000)).toISOString(), // 오늘 6시간 전
+      status: "연락완료",
+    },
+    {
+      id: "clxyz4",
+      name: "이민수",
+      phone: "010-4567-8901",
+      createdAt: new Date(today.getTime() - (3 * 24 * 60 * 60 * 1000)).toISOString(), // 3일 전
+      status: "상담중",
+    },
+    {
+      id: "clxyz5",
+      name: "정수진",
+      phone: "010-5678-9012",
+      createdAt: new Date(today.getTime() - (30 * 60 * 1000)).toISOString(), // 오늘 30분 전
+      status: "pending",
+    }
+  ];
+};
+
+const mockCounsels = generateMockData();
 
 // Supabase 클라이언트 설정
 const supabase = createClient<Database>(
@@ -177,59 +205,82 @@ function getStatusColor(status?: CounselStatus) {
   }
 }
 
-// PRD Phase 2: 날짜 범위 계산 함수
+// PRD Phase 2: 날짜 범위 계산 함수 (한국 시간대 문제 해결)
 function getDateRange(filter: DateFilter): { startDate: Date; endDate: Date } {
+  // 한국 시간 기준으로 현재 시간 계산
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const kstOffset = 9 * 60; // 한국 시간 오프셋 (분)
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const kstNow = new Date(utc + (kstOffset * 60000));
+  
+  // 한국 시간 기준 오늘 00:00:00
+  const kstToday = new Date(kstNow.getFullYear(), kstNow.getMonth(), kstNow.getDate());
   
   switch (filter.preset) {
     case 'today':
-      return {
-        startDate: today,
-        endDate: new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1)
-      };
+      // 오늘 00:00:00 KST ~ 23:59:59 KST
+      const todayStart = new Date(kstToday.getTime() - (9 * 60 * 60 * 1000)); // UTC로 변환
+      const todayEnd = new Date(todayStart.getTime() + (24 * 60 * 60 * 1000) - 1);
+      return { startDate: todayStart, endDate: todayEnd };
     
     case 'yesterday':
-      const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-      return {
-        startDate: yesterday,
-        endDate: new Date(yesterday.getTime() + 24 * 60 * 60 * 1000 - 1)
-      };
+      // 어제 00:00:00 KST ~ 23:59:59 KST
+      const yesterdayKst = new Date(kstToday.getTime() - (24 * 60 * 60 * 1000));
+      const yesterdayStart = new Date(yesterdayKst.getTime() - (9 * 60 * 60 * 1000)); // UTC로 변환
+      const yesterdayEnd = new Date(yesterdayStart.getTime() + (24 * 60 * 60 * 1000) - 1);
+      return { startDate: yesterdayStart, endDate: yesterdayEnd };
     
     case 'thisWeek':
-      const weekStart = new Date(today);
-      weekStart.setDate(today.getDate() - today.getDay());
-      return {
-        startDate: weekStart,
-        endDate: new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1)
-      };
+      // 이번 주 일요일 00:00:00 KST ~ 토요일 23:59:59 KST
+      const thisWeekStartKst = new Date(kstToday);
+      thisWeekStartKst.setDate(kstToday.getDate() - kstToday.getDay()); // 일요일로 설정
+      const thisWeekStart = new Date(thisWeekStartKst.getTime() - (9 * 60 * 60 * 1000)); // UTC로 변환
+      const thisWeekEnd = new Date(thisWeekStart.getTime() + (7 * 24 * 60 * 60 * 1000) - 1);
+      return { startDate: thisWeekStart, endDate: thisWeekEnd };
     
     case 'lastWeek':
-      const lastWeekStart = new Date(today);
-      lastWeekStart.setDate(today.getDate() - today.getDay() - 7);
-      return {
-        startDate: lastWeekStart,
-        endDate: new Date(lastWeekStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1)
-      };
+      // 지난 주 일요일 00:00:00 KST ~ 토요일 23:59:59 KST
+      const lastWeekStartKst = new Date(kstToday);
+      lastWeekStartKst.setDate(kstToday.getDate() - kstToday.getDay() - 7); // 지난 주 일요일
+      const lastWeekStart = new Date(lastWeekStartKst.getTime() - (9 * 60 * 60 * 1000)); // UTC로 변환
+      const lastWeekEnd = new Date(lastWeekStart.getTime() + (7 * 24 * 60 * 60 * 1000) - 1);
+      return { startDate: lastWeekStart, endDate: lastWeekEnd };
     
     case 'thisMonth':
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-      return { startDate: monthStart, endDate: monthEnd };
+      // 이번 달 1일 00:00:00 KST ~ 마지막 날 23:59:59 KST
+      const thisMonthStartKst = new Date(kstNow.getFullYear(), kstNow.getMonth(), 1);
+      const thisMonthEndKst = new Date(kstNow.getFullYear(), kstNow.getMonth() + 1, 0, 23, 59, 59, 999);
+      const thisMonthStart = new Date(thisMonthStartKst.getTime() - (9 * 60 * 60 * 1000)); // UTC로 변환
+      const thisMonthEnd = new Date(thisMonthEndKst.getTime() - (9 * 60 * 60 * 1000)); // UTC로 변환
+      return { startDate: thisMonthStart, endDate: thisMonthEnd };
     
     case 'lastMonth':
-      const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      // 지난 달 1일 00:00:00 KST ~ 마지막 날 23:59:59 KST
+      const lastMonthStartKst = new Date(kstNow.getFullYear(), kstNow.getMonth() - 1, 1);
+      const lastMonthEndKst = new Date(kstNow.getFullYear(), kstNow.getMonth(), 0, 23, 59, 59, 999);
+      const lastMonthStart = new Date(lastMonthStartKst.getTime() - (9 * 60 * 60 * 1000)); // UTC로 변환
+      const lastMonthEnd = new Date(lastMonthEndKst.getTime() - (9 * 60 * 60 * 1000)); // UTC로 변환
       return { startDate: lastMonthStart, endDate: lastMonthEnd };
     
     case 'custom':
-      return {
-        startDate: filter.startDate || today,
-        endDate: filter.endDate || today
-      };
+      if (filter.startDate && filter.endDate) {
+        // 사용자 정의 날짜도 한국 시간 기준으로 처리
+        const customStart = new Date(filter.startDate.getTime() - (9 * 60 * 60 * 1000)); // UTC로 변환
+        const customEnd = new Date(filter.endDate.getTime() - (9 * 60 * 60 * 1000) + (24 * 60 * 60 * 1000) - 1); // UTC로 변환
+        return { startDate: customStart, endDate: customEnd };
+      }
+      // fallback to today
+      const fallbackStart = new Date(kstToday.getTime() - (9 * 60 * 60 * 1000));
+      const fallbackEnd = new Date(fallbackStart.getTime() + (24 * 60 * 60 * 1000) - 1);
+      return { startDate: fallbackStart, endDate: fallbackEnd };
     
     default:
-      return { startDate: today, endDate: today };
+      // 기본값: 이번 주
+      const defaultWeekStartKst = new Date(kstToday);
+      defaultWeekStartKst.setDate(kstToday.getDate() - kstToday.getDay());
+      const defaultStart = new Date(defaultWeekStartKst.getTime() - (9 * 60 * 60 * 1000));
+      const defaultEnd = new Date(defaultStart.getTime() + (7 * 24 * 60 * 60 * 1000) - 1);
+      return { startDate: defaultStart, endDate: defaultEnd };
   }
 }
 

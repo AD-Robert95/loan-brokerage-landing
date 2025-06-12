@@ -15,18 +15,53 @@ export default function AuthWrapper({ children }: AuthWrapperProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  
+  // 1~2인 사업장 보안 강화 상태
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blockEndTime, setBlockEndTime] = useState<number | null>(null);
+  const [sessionWarning, setSessionWarning] = useState(false);
 
   useEffect(() => {
     // 컴포넌트 마운트시 기존 인증 정보 체크
     const checkAuthStatus = () => {
       try {
         const authTime = localStorage.getItem('admin_auth_time');
+        const attempts = localStorage.getItem('admin_failed_attempts');
+        const blockTime = localStorage.getItem('admin_block_time');
+        
+        // 실패 횟수 복원
+        if (attempts) {
+          setFailedAttempts(parseInt(attempts));
+        }
+        
+        // 차단 상태 확인
+        if (blockTime) {
+          const blockEnd = parseInt(blockTime);
+          const now = Date.now();
+          if (now < blockEnd) {
+            setIsBlocked(true);
+            setBlockEndTime(blockEnd);
+          } else {
+            // 차단 시간 만료시 초기화
+            localStorage.removeItem('admin_block_time');
+            localStorage.removeItem('admin_failed_attempts');
+            setFailedAttempts(0);
+          }
+        }
+        
         if (authTime) {
           const now = Date.now();
           const authDate = parseInt(authTime);
-          // 24시간 동안 유효 (24 * 60 * 60 * 1000ms)
-          if (now - authDate < 24 * 60 * 60 * 1000) {
+          // 2시간 동안 유효 (보안 강화: 24시간 → 2시간)
+          if (now - authDate < 2 * 60 * 60 * 1000) {
             setIsAuthorized(true);
+            
+            // 세션 만료 30분 전 경고 (1시간 30분 후)
+            const warningTime = authDate + (1.5 * 60 * 60 * 1000);
+            if (now > warningTime) {
+              setSessionWarning(true);
+            }
           } else {
             // 만료된 인증 정보 제거
             localStorage.removeItem('admin_auth_time');
@@ -40,23 +75,67 @@ export default function AuthWrapper({ children }: AuthWrapperProps) {
     };
 
     checkAuthStatus();
+    
+    // 1분마다 세션 상태 체크
+    const interval = setInterval(checkAuthStatus, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleAuth = () => {
+    // 차단 상태 확인
+    if (isBlocked && blockEndTime) {
+      const remainingTime = Math.ceil((blockEndTime - Date.now()) / 1000 / 60);
+      setError(`보안상 ${remainingTime}분 후에 다시 시도해주세요.`);
+      return;
+    }
+    
     const adminPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'admin2024!';
     
     if (password === adminPassword) {
+      // 성공시 초기화
       setIsAuthorized(true);
+      setFailedAttempts(0);
+      setIsBlocked(false);
+      setBlockEndTime(null);
+      
       try {
         localStorage.setItem('admin_auth_time', Date.now().toString());
+        localStorage.removeItem('admin_failed_attempts');
+        localStorage.removeItem('admin_block_time');
       } catch (error) {
         console.log('localStorage save error:', error);
       }
       setError('');
-      setPassword(''); // 패스워드 입력값 초기화
+      setPassword('');
     } else {
-      setError('패스워드가 올바르지 않습니다.');
-      setPassword(''); // 잘못된 패스워드 입력값 초기화
+      // 실패시 보안 강화 로직
+      const newFailedAttempts = failedAttempts + 1;
+      setFailedAttempts(newFailedAttempts);
+      
+      try {
+        localStorage.setItem('admin_failed_attempts', newFailedAttempts.toString());
+      } catch (error) {
+        console.log('localStorage save error:', error);
+      }
+      
+      if (newFailedAttempts >= 3) {
+        // 3회 실패시 15분 차단
+        const blockTime = Date.now() + (15 * 60 * 1000);
+        setIsBlocked(true);
+        setBlockEndTime(blockTime);
+        
+        try {
+          localStorage.setItem('admin_block_time', blockTime.toString());
+        } catch (error) {
+          console.log('localStorage save error:', error);
+        }
+        
+        setError('3회 연속 실패로 15분간 접근이 차단됩니다.');
+      } else {
+        setError(`패스워드가 올바르지 않습니다. (${newFailedAttempts}/3회 실패)`);
+      }
+      
+      setPassword('');
     }
   };
 
@@ -143,6 +222,33 @@ export default function AuthWrapper({ children }: AuthWrapperProps) {
   // 인증된 경우 대시보드와 로그아웃 버튼 표시
   return (
     <div className="relative">
+      {/* 세션 만료 경고 */}
+      {sessionWarning && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 shadow-lg">
+            <div className="flex items-center space-x-2">
+              <Shield className="w-5 h-5 text-yellow-600" />
+              <div>
+                <p className="text-sm font-medium text-yellow-800">
+                  세션 만료 경고
+                </p>
+                <p className="text-xs text-yellow-600">
+                  30분 후 자동 로그아웃됩니다. 작업을 저장해주세요.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setSessionWarning(false)}
+                className="text-yellow-600 border-yellow-300"
+              >
+                확인
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* 로그아웃 버튼 */}
       <div className="fixed top-4 right-4 z-50">
         <Button 

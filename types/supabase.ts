@@ -6,6 +6,13 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+export type CounselStatus = 
+  | 'pending'     // 대기중 (기본값)
+  | 'contacted'   // 연락완료
+  | 'consulting'  // 상담중  
+  | 'completed'   // 상담완료
+  | 'cancelled'   // 취소
+
 export interface Database {
   public: {
     Tables: {
@@ -18,6 +25,7 @@ export interface Database {
           loan_amount: number
           employed: boolean
           created_at: string
+          status?: CounselStatus  // 상담 상태 (선택적 - 기존 데이터 호환성)
         }
         Insert: {
           id?: string | number // 삽입 시 선택적
@@ -27,6 +35,7 @@ export interface Database {
           loan_amount: number
           employed: boolean
           created_at?: string // 삽입 시 선택적
+          status?: CounselStatus // 삽입 시 선택적 (기본값: pending)
         }
         Update: {
           id?: string | number
@@ -36,6 +45,7 @@ export interface Database {
           loan_amount?: number
           employed?: boolean
           created_at?: string
+          status?: CounselStatus // 업데이트 시 선택적
         }
         Relationships: []
       }

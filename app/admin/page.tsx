@@ -1,7 +1,7 @@
 "use client";
 
 import AuthWrapper from './auth-wrapper';
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -418,8 +418,12 @@ function AdminDashboard() {
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
 
-  // 데이터 페칭 함수 (날짜 필터 적용)
-  const fetchDashboardData = async (isRefresh = false, filter?: DateFilter) => {
+  // 자동 새로고침 필터 리셋 문제 해결: 최신 필터 상태를 항상 참조
+  const dateFilterRef = useRef<DateFilter>(dateFilter);
+  dateFilterRef.current = dateFilter;
+
+  // 데이터 페칭 함수 (날짜 필터 적용) - 자동 새로고침 최적화
+  const fetchDashboardData = useCallback(async (isRefresh = false, filter?: DateFilter) => {
     try {
       if (isRefresh) {
         setRefreshing(true);
@@ -432,7 +436,8 @@ function AdminDashboard() {
         ? 'loanbrothers_test' 
         : 'loanbrothers';
 
-      const currentFilter = filter || dateFilter;
+      // 자동 새로고침시 최신 필터 상태 사용, 수동 호출시 전달받은 필터 우선
+      const currentFilter = filter || dateFilterRef.current;
       const { startDate, endDate } = getDateRange(currentFilter);
 
       // 병렬로 데이터 가져오기 (날짜 필터 적용)
@@ -504,7 +509,7 @@ function AdminDashboard() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []); // 의존성 배열: 빈 배열로 함수 재생성 방지
 
   // 상태 변경 함수
   const handleStatusChange = async (applicationId: string | number, newStatus: CounselStatus) => {
@@ -616,10 +621,15 @@ function AdminDashboard() {
 
   useEffect(() => {
     fetchDashboardData();
-    // 30초마다 자동 새로고침
-    const interval = setInterval(() => fetchDashboardData(true), 30000);
+    
+    // 자동 새로고침 - 현재 필터 상태를 유지하면서 30초마다 실행
+    const interval = setInterval(() => {
+      // dateFilterRef.current를 사용하여 최신 필터 상태 전달
+      fetchDashboardData(true);
+    }, 30000);
+    
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchDashboardData]); // fetchDashboardData를 의존성에 추가
 
   const handleRefresh = () => {
     fetchDashboardData(true);

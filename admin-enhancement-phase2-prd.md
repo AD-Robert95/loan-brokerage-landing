@@ -339,6 +339,115 @@ import { Label } from "@/components/ui/label";
    - 실용주의적 접근: 목표 달성을 위한 가장 단순하고 안정적인 방법 선택
    - 의존성 최소화: 외부 라이브러리보다 웹 표준 우선
 
+#### 8.3.2 자동 새로고침 필터 리셋 문제
+
+**🚨 발생한 문제**
+```
+문제: 사용자가 날짜 필터를 설정한 후 30초가 지나면 필터가 기본값으로 리셋됨
+결과: "선택한 기간에 신청 데이터가 없습니다" 메시지 표시, 필터 설정이 무효화됨
+```
+
+**🔍 근본 원인 분석**
+1. **자동 새로고침 로직 문제**
+   ```typescript
+   // 문제가 있는 코드
+   useEffect(() => {
+     fetchDashboardData();
+     const interval = setInterval(() => fetchDashboardData(true), 30000);
+     return () => clearInterval(interval);
+   }, []);
+   ```
+
+2. **필터 상태 관리 문제**
+   - 자동 새로고침: `fetchDashboardData(true)` → `filter` 파라미터 없음
+   - 필터 정보 손실: `currentFilter = filter || dateFilter` → 클로저 문제로 구 상태 참조
+   - 상태 동기화 실패: useEffect 의존성 배열이 필터 변경을 감지하지 못함
+
+3. **문제 시나리오**
+   ```
+   사용자 필터 설정 → 30초 대기 → 자동 새로고침 실행 → 필터 무시 → 기본 데이터 표시
+   ```
+
+**💡 해결 방안**
+
+| 접근법 | 장점 | 단점 | 선택 여부 |
+|--------|------|------|-----------|
+| useEffect 의존성에 dateFilter 추가 | 단순 | 무한 재렌더링 위험 | ❌ |
+| useRef로 최신 상태 참조 | 성능 우수, 안정적 | 약간 복잡 | ✅ **채택** |
+| 컨텍스트 API 사용 | 전역 상태 관리 | 과도한 엔지니어링 | ❌ |
+
+**🛠️ 최종 구현 방식**
+
+**기존 문제 코드**:
+```typescript
+const [dateFilter, setDateFilter] = useState({ preset: 'thisWeek' });
+
+const fetchDashboardData = async (isRefresh = false, filter?: DateFilter) => {
+  const currentFilter = filter || dateFilter; // 클로저 문제
+  // ...
+};
+
+useEffect(() => {
+  fetchDashboardData();
+  const interval = setInterval(() => fetchDashboardData(true), 30000); // 필터 누락
+  return () => clearInterval(interval);
+}, []); // 의존성 부족
+```
+
+**개선된 해결 코드**:
+```typescript
+const [dateFilter, setDateFilter] = useState({ preset: 'thisWeek' });
+
+// useRef로 최신 필터 상태 항상 참조
+const dateFilterRef = useRef<DateFilter>(dateFilter);
+dateFilterRef.current = dateFilter;
+
+const fetchDashboardData = useCallback(async (isRefresh = false, filter?: DateFilter) => {
+  // 자동 새로고침시 최신 필터 상태 사용, 수동 호출시 전달받은 필터 우선
+  const currentFilter = filter || dateFilterRef.current;
+  // ...
+}, []); // 함수 재생성 방지
+
+useEffect(() => {
+  fetchDashboardData();
+  
+  // 자동 새로고침 - 현재 필터 상태를 유지하면서 30초마다 실행
+  const interval = setInterval(() => {
+    fetchDashboardData(true); // dateFilterRef.current 자동 사용
+  }, 30000);
+  
+  return () => clearInterval(interval);
+}, [fetchDashboardData]); // fetchDashboardData를 의존성에 추가
+```
+
+**📊 해결 결과**
+
+| 상황 | 기존 동작 | 개선된 동작 |
+|------|-----------|-------------|
+| **필터 설정 후 30초** | 기본값으로 리셋 ❌ | 설정된 필터 유지 ✅ |
+| **연속 필터 변경** | 30초마다 리셋 ❌ | 최신 필터 항상 적용 ✅ |
+| **페이지 새로고침** | 기본값으로 복귀 ⚠️ | 기본값으로 복귀 ⚠️ |
+| **수동 새로고침** | 현재 필터 유지 ✅ | 현재 필터 유지 ✅ |
+
+**🎯 비즈니스 임팩트**
+- ✅ **사용자 경험**: 필터 설정이 예기치 않게 사라지지 않음
+- ✅ **업무 효율성**: 30초마다 필터를 다시 설정할 필요 없음
+- ✅ **신뢰성**: 관리자가 시스템을 신뢰하고 지속 사용 가능
+- ✅ **실시간성**: 자동 새로고침 기능은 유지하면서 필터도 보존
+
+**📚 기술적 교훈**
+1. **React Hook 조합 패턴**
+   - `useRef`: 리렌더링 없이 최신 값 참조
+   - `useCallback`: 함수 재생성 방지 및 의존성 관리
+   - `useEffect`: 올바른 의존성 배열로 안정적인 사이드 이펙트
+
+2. **상태 관리 베스트 프랙티스**
+   ```
+   상태 변경 → Ref 업데이트 → 자동 새로고침에서 최신 상태 사용
+   ```
+   - 상태와 Ref의 동기화로 클로저 문제 해결
+   - 자동화된 동작에서도 사용자 설정 보존
+
 **🔄 구현 상태 업데이트**
 
 #### 3.1.4 구현 요구사항 (수정됨)

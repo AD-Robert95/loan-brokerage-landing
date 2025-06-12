@@ -35,7 +35,16 @@ import {
   EyeOff,
   Download,
   Filter,
-  FileSpreadsheet
+  FileSpreadsheet,
+  BarChart3,
+  PieChart,
+  FileText,
+  Menu,
+  X,
+  MessageSquare,
+  Edit3,
+  Save,
+  ChevronRight
 } from "lucide-react";
 import { createClient } from '@supabase/supabase-js';
 import type { Database, CounselStatus } from '@/types/supabase';
@@ -101,6 +110,20 @@ const supabase = createClient<Database>(
 
 // 타입 정의
 type Lead = Database['public']['Tables']['loanbrothers']['Row'];
+
+// Phase 3: 사이드바 메뉴 타입 정의
+interface MenuSection {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  description: string;
+}
+
+const menuSections: MenuSection[] = [
+  { id: 'statistics', label: '통계 현황', icon: BarChart3, description: '오늘/주/월 통계' },
+  { id: 'charts', label: '분석 차트', icon: PieChart, description: '취업상태별/지역별' },
+  { id: 'applications', label: '신청 목록', icon: FileText, description: '상담 신청 관리' }
+];
 
 // PRD Phase 2: 날짜 필터 타입 정의
 type DateFilterPreset = 
@@ -418,6 +441,15 @@ function AdminDashboard() {
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
 
+  // Phase 3: 사이드바 메뉴 상태
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState('statistics');
+  
+  // Phase 3: 메모 기능 상태
+  const [editingMemo, setEditingMemo] = useState<string | null>(null);
+  const [memoValues, setMemoValues] = useState<Record<string, string>>({});
+  const [savingMemo, setSavingMemo] = useState<string | null>(null);
+
   // 자동 새로고침 필터 리셋 문제 해결: 최신 필터 상태를 항상 참조
   const dateFilterRef = useRef<DateFilter>(dateFilter);
   dateFilterRef.current = dateFilter;
@@ -586,7 +618,8 @@ function AdminDashboard() {
         '대출금액': formatCurrency(app.loan_amount),
         '취업상태': app.employed ? '재직중' : '미취업',
         '신청일시': new Date(app.created_at).toLocaleString('ko-KR'),
-        '상태': getStatusLabel(app.status)
+        '상태': getStatusLabel(app.status),
+        '메모': app.memo || '' // Phase 3: 메모 컬럼 추가
       }));
 
       // 워크북 생성
@@ -601,7 +634,8 @@ function AdminDashboard() {
         { wch: 15 },  // 대출금액
         { wch: 10 },  // 취업상태
         { wch: 20 },  // 신청일시
-        { wch: 10 }   // 상태
+        { wch: 10 },  // 상태
+        { wch: 30 }   // 메모
       ];
       worksheet['!cols'] = colWidths;
 
@@ -631,8 +665,91 @@ function AdminDashboard() {
     return () => clearInterval(interval);
   }, [fetchDashboardData]); // fetchDashboardData를 의존성에 추가
 
+  // Phase 3: Intersection Observer로 현재 섹션 감지
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setActiveSection(entry.target.id);
+          }
+        });
+      },
+      { threshold: 0.3 }
+    );
+
+    // 각 섹션 관찰 등록
+    menuSections.forEach(section => {
+      const element = document.getElementById(section.id);
+      if (element) {
+        observer.observe(element);
+      }
+    });
+
+    return () => observer.disconnect();
+  }, [data]); // data가 변경될 때마다 재설정
+
   const handleRefresh = () => {
     fetchDashboardData(true);
+  };
+
+  // Phase 3: 사이드바 메뉴 함수들
+  const handleScrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+      setActiveSection(sectionId);
+      setSidebarOpen(false); // 모바일에서 메뉴 닫기
+    }
+  };
+
+  // Phase 3: 메모 관련 함수들
+  const handleMemoEdit = (applicationId: string, currentMemo?: string) => {
+    setEditingMemo(applicationId);
+    setMemoValues(prev => ({ 
+      ...prev, 
+      [applicationId]: currentMemo || '' 
+    }));
+  };
+
+  const handleMemoSave = async (applicationId: string) => {
+    const memo = memoValues[applicationId];
+    if (memo === undefined) return;
+
+    try {
+      setSavingMemo(applicationId);
+
+      const tableName = process.env.NODE_ENV === 'test' || process.env.VERCEL_ENV === 'preview' 
+        ? 'loanbrothers_test' 
+        : 'loanbrothers';
+
+      const { error } = await supabase
+        .from(tableName)
+        .update({ memo: memo.trim() })
+        .eq('id', applicationId);
+
+      if (error) throw error;
+
+      // UI 즉시 업데이트
+      if (data) {
+        const updatedApplications = data.applications.map(app => 
+          app.id === applicationId ? { ...app, memo: memo.trim() } : app
+        );
+        setData({ ...data, applications: updatedApplications });
+      }
+
+      setEditingMemo(null);
+    } catch (err) {
+      console.error('메모 저장 실패:', err);
+      setError('메모 저장에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setSavingMemo(null);
+    }
+  };
+
+  const handleMemoCancel = () => {
+    setEditingMemo(null);
+    setMemoValues({});
   };
 
   // 차트 데이터 준비
@@ -700,12 +817,15 @@ function AdminDashboard() {
                   <Skeleton key={i} className="h-12 w-full" />
                 ))}
               </div>
-            </CardContent>
-          </Card>
+                      </CardContent>
+        </Card>
+            </div>
+          </div>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   // 에러 상태
   if (error && !data) {
@@ -744,17 +864,92 @@ function AdminDashboard() {
   if (!data) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-7xl mx-auto space-y-6">
-        
-        {/* 헤더 */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">대출 상담 대시보드</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              마지막 업데이트: {lastUpdated.toLocaleString('ko-KR')}
-            </p>
+    <div className="min-h-screen bg-gray-50">
+      {/* Phase 3: 사이드바 메뉴 */}
+      <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:shadow-none lg:border-r`}>
+        <div className="flex flex-col h-full">
+          {/* 사이드바 헤더 */}
+          <div className="flex items-center justify-between p-4 border-b">
+            <h2 className="text-lg font-semibold text-gray-900">대시보드</h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
+          
+          {/* 메뉴 항목들 */}
+          <nav className="flex-1 p-4 space-y-2">
+            {menuSections.map((section) => {
+              const IconComponent = section.icon;
+              const isActive = activeSection === section.id;
+              
+              return (
+                <button
+                  key={section.id}
+                  onClick={() => handleScrollToSection(section.id)}
+                  className={`w-full flex items-center gap-3 px-3 py-2 text-left rounded-md transition-colors ${
+                    isActive 
+                      ? 'bg-blue-50 text-blue-700 border border-blue-200' 
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                >
+                  <IconComponent className="h-5 w-5" />
+                  <div>
+                    <div className="font-medium">{section.label}</div>
+                    <div className="text-xs text-gray-500">{section.description}</div>
+                  </div>
+                  {isActive && <ChevronRight className="h-4 w-4 ml-auto" />}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* 하단 정보 */}
+          <div className="p-4 border-t">
+            <div className="text-xs text-gray-500">
+              마지막 업데이트<br />
+              {lastUpdated.toLocaleString('ko-KR')}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 모바일 오버레이 */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* 메인 콘텐츠 */}
+      <div className="lg:ml-64">
+        <div className="p-4">
+          <div className="max-w-7xl mx-auto space-y-6">
+            
+            {/* 헤더 */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="flex items-center gap-4">
+                {/* 모바일 메뉴 버튼 */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSidebarOpen(true)}
+                  className="lg:hidden"
+                >
+                  <Menu className="h-4 w-4" />
+                </Button>
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900">대출 상담 대시보드</h1>
+                  <p className="text-sm text-gray-500 mt-1">
+                    실시간 상담 신청 현황을 확인하세요
+                  </p>
+                </div>
+              </div>
           <Button
             onClick={handleRefresh}
             disabled={refreshing}
@@ -783,7 +978,7 @@ function AdminDashboard() {
         )}
 
         {/* 통계 카드 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div id="statistics" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">오늘 신청</CardTitle>
@@ -830,7 +1025,7 @@ function AdminDashboard() {
         </div>
 
         {/* 차트 섹션 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div id="charts" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* 취업상태별 분포 */}
           <Card>
             <CardHeader>
@@ -879,7 +1074,7 @@ function AdminDashboard() {
         </div>
 
         {/* PRD Phase 2: 신청 목록 (날짜 필터 + 엑셀 다운로드) */}
-        <Card>
+        <Card id="applications">
           <CardHeader>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
@@ -995,18 +1190,19 @@ function AdminDashboard() {
             ) : (
               <div className="overflow-x-auto">
                 <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {/* PRD Phase 2: ID 컬럼 제거 */}
-                      <TableHead>나이</TableHead>
-                      <TableHead>연락처</TableHead>
-                      <TableHead>지역</TableHead>
-                      <TableHead>대출금액</TableHead>
-                      <TableHead>취업상태</TableHead>
-                      <TableHead>신청일시</TableHead>
-                      <TableHead>상태</TableHead>
-                    </TableRow>
-                  </TableHeader>
+                                      <TableHeader>
+                      <TableRow>
+                        {/* PRD Phase 2: ID 컬럼 제거 */}
+                        <TableHead>나이</TableHead>
+                        <TableHead>연락처</TableHead>
+                        <TableHead>지역</TableHead>
+                        <TableHead>대출금액</TableHead>
+                        <TableHead>취업상태</TableHead>
+                        <TableHead>신청일시</TableHead>
+                        <TableHead>상태</TableHead>
+                        <TableHead className="w-48">메모</TableHead>
+                      </TableRow>
+                    </TableHeader>
                   <TableBody>
                     {data.applications.map((application) => (
                       <TableRow key={application.id}>
@@ -1084,6 +1280,75 @@ function AdminDashboard() {
                               <SelectItem value="cancelled">취소</SelectItem>
                             </SelectContent>
                           </Select>
+                        </TableCell>
+
+                        {/* Phase 3: 메모 컬럼 */}
+                        <TableCell>
+                          {editingMemo === String(application.id) ? (
+                            <div className="flex items-center gap-2">
+                              <textarea
+                                value={memoValues[String(application.id)] || ''}
+                                onChange={(e) => setMemoValues(prev => ({ 
+                                  ...prev, 
+                                  [String(application.id)]: e.target.value 
+                                }))}
+                                placeholder="메모를 입력하세요..."
+                                className="flex-1 min-w-0 p-2 text-sm border rounded resize-none"
+                                rows={2}
+                                maxLength={500}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleMemoSave(String(application.id));
+                                  } else if (e.key === 'Escape') {
+                                    handleMemoCancel();
+                                  }
+                                }}
+                                autoFocus
+                              />
+                              <div className="flex flex-col gap-1">
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleMemoSave(String(application.id))}
+                                  disabled={savingMemo === String(application.id)}
+                                  className="h-6 w-6 p-0"
+                                >
+                                  {savingMemo === String(application.id) ? (
+                                    <RefreshCw className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Save className="h-3 w-3" />
+                                  )}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={handleMemoCancel}
+                                  className="h-6 w-6 p-0"
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div 
+                              className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                              onClick={() => handleMemoEdit(String(application.id), application.memo)}
+                            >
+                              {application.memo ? (
+                                <>
+                                  <MessageSquare className="h-4 w-4 text-blue-500" />
+                                  <span className="text-sm text-gray-700 truncate max-w-32">
+                                    {application.memo}
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <Edit3 className="h-4 w-4 text-gray-400" />
+                                  <span className="text-sm text-gray-400">메모 추가</span>
+                                </>
+                              )}
+                            </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}

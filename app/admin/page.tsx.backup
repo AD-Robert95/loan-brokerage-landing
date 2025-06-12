@@ -1,7 +1,7 @@
 "use client";
 
 import AuthWrapper from './auth-wrapper';
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -56,23 +56,51 @@ import { ko } from "date-fns/locale";
 // TODO: 로그인/권한 체크 후 접근 허용
 // TODO: DB 연동 시 getServerSideProps 또는 server component로 데이터 fetch
 
-// 목업 데이터
-const mockCounsels = [
-  {
-    id: "clxyz1",
-    name: "홍길동",
-    phone: "010-1234-5678",
-    createdAt: "2025-05-18T14:22:00.000Z",
-    status: "대기중",
-  },
-  {
-    id: "clxyz2",
-    name: "김철수",
-    phone: "010-2345-6789",
-    createdAt: "2025-05-17T10:11:00.000Z",
-    status: "상담완료",
-  },
-];
+// 목업 데이터 (현재 날짜 기준으로 생성)
+const generateMockData = () => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  return [
+    {
+      id: "clxyz1",
+      name: "홍길동",
+      phone: "010-1234-5678",
+      createdAt: new Date(today.getTime() - (2 * 60 * 60 * 1000)).toISOString(), // 오늘 2시간 전
+      status: "대기중",
+    },
+    {
+      id: "clxyz2",
+      name: "김철수",
+      phone: "010-2345-6789",
+      createdAt: new Date(today.getTime() - (24 * 60 * 60 * 1000)).toISOString(), // 어제
+      status: "상담완료",
+    },
+    {
+      id: "clxyz3",
+      name: "박영희",
+      phone: "010-3456-7890",
+      createdAt: new Date(today.getTime() - (6 * 60 * 60 * 1000)).toISOString(), // 오늘 6시간 전
+      status: "연락완료",
+    },
+    {
+      id: "clxyz4",
+      name: "이민수",
+      phone: "010-4567-8901",
+      createdAt: new Date(today.getTime() - (3 * 24 * 60 * 60 * 1000)).toISOString(), // 3일 전
+      status: "상담중",
+    },
+    {
+      id: "clxyz5",
+      name: "정수진",
+      phone: "010-5678-9012",
+      createdAt: new Date(today.getTime() - (30 * 60 * 1000)).toISOString(), // 오늘 30분 전
+      status: "pending",
+    }
+  ];
+};
+
+const mockCounsels = generateMockData();
 
 // Supabase 클라이언트 설정
 const supabase = createClient<Database>(
@@ -83,13 +111,19 @@ const supabase = createClient<Database>(
 // 타입 정의
 type Lead = Database['public']['Tables']['loanbrothers']['Row'];
 
-// Phase 3: 메뉴 섹션 타입
+// Phase 3: 사이드바 메뉴 타입 정의
 interface MenuSection {
   id: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   description: string;
 }
+
+const menuSections: MenuSection[] = [
+  { id: 'statistics', label: '통계 현황', icon: BarChart3, description: '오늘/주/월 통계' },
+  { id: 'charts', label: '분석 차트', icon: PieChart, description: '취업상태별/지역별' },
+  { id: 'applications', label: '신청 목록', icon: FileText, description: '상담 신청 관리' }
+];
 
 // PRD Phase 2: 날짜 필터 타입 정의
 type DateFilterPreset = 
@@ -194,59 +228,82 @@ function getStatusColor(status?: CounselStatus) {
   }
 }
 
-// PRD Phase 2: 날짜 범위 계산 함수
+// PRD Phase 2: 날짜 범위 계산 함수 (한국 시간대 문제 해결)
 function getDateRange(filter: DateFilter): { startDate: Date; endDate: Date } {
+  // 한국 시간 기준으로 현재 시간 계산
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const kstOffset = 9 * 60; // 한국 시간 오프셋 (분)
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const kstNow = new Date(utc + (kstOffset * 60000));
+  
+  // 한국 시간 기준 오늘 00:00:00
+  const kstToday = new Date(kstNow.getFullYear(), kstNow.getMonth(), kstNow.getDate());
   
   switch (filter.preset) {
     case 'today':
-      return {
-        startDate: today,
-        endDate: new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1)
-      };
+      // 오늘 00:00:00 KST ~ 23:59:59 KST
+      const todayStart = new Date(kstToday.getTime() - (9 * 60 * 60 * 1000)); // UTC로 변환
+      const todayEnd = new Date(todayStart.getTime() + (24 * 60 * 60 * 1000) - 1);
+      return { startDate: todayStart, endDate: todayEnd };
     
     case 'yesterday':
-      const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-      return {
-        startDate: yesterday,
-        endDate: new Date(yesterday.getTime() + 24 * 60 * 60 * 1000 - 1)
-      };
+      // 어제 00:00:00 KST ~ 23:59:59 KST
+      const yesterdayKst = new Date(kstToday.getTime() - (24 * 60 * 60 * 1000));
+      const yesterdayStart = new Date(yesterdayKst.getTime() - (9 * 60 * 60 * 1000)); // UTC로 변환
+      const yesterdayEnd = new Date(yesterdayStart.getTime() + (24 * 60 * 60 * 1000) - 1);
+      return { startDate: yesterdayStart, endDate: yesterdayEnd };
     
     case 'thisWeek':
-      const weekStart = new Date(today);
-      weekStart.setDate(today.getDate() - today.getDay());
-      return {
-        startDate: weekStart,
-        endDate: new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1)
-      };
+      // 이번 주 일요일 00:00:00 KST ~ 토요일 23:59:59 KST
+      const thisWeekStartKst = new Date(kstToday);
+      thisWeekStartKst.setDate(kstToday.getDate() - kstToday.getDay()); // 일요일로 설정
+      const thisWeekStart = new Date(thisWeekStartKst.getTime() - (9 * 60 * 60 * 1000)); // UTC로 변환
+      const thisWeekEnd = new Date(thisWeekStart.getTime() + (7 * 24 * 60 * 60 * 1000) - 1);
+      return { startDate: thisWeekStart, endDate: thisWeekEnd };
     
     case 'lastWeek':
-      const lastWeekStart = new Date(today);
-      lastWeekStart.setDate(today.getDate() - today.getDay() - 7);
-      return {
-        startDate: lastWeekStart,
-        endDate: new Date(lastWeekStart.getTime() + 7 * 24 * 60 * 60 * 1000 - 1)
-      };
+      // 지난 주 일요일 00:00:00 KST ~ 토요일 23:59:59 KST
+      const lastWeekStartKst = new Date(kstToday);
+      lastWeekStartKst.setDate(kstToday.getDate() - kstToday.getDay() - 7); // 지난 주 일요일
+      const lastWeekStart = new Date(lastWeekStartKst.getTime() - (9 * 60 * 60 * 1000)); // UTC로 변환
+      const lastWeekEnd = new Date(lastWeekStart.getTime() + (7 * 24 * 60 * 60 * 1000) - 1);
+      return { startDate: lastWeekStart, endDate: lastWeekEnd };
     
     case 'thisMonth':
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-      return { startDate: monthStart, endDate: monthEnd };
+      // 이번 달 1일 00:00:00 KST ~ 마지막 날 23:59:59 KST
+      const thisMonthStartKst = new Date(kstNow.getFullYear(), kstNow.getMonth(), 1);
+      const thisMonthEndKst = new Date(kstNow.getFullYear(), kstNow.getMonth() + 1, 0, 23, 59, 59, 999);
+      const thisMonthStart = new Date(thisMonthStartKst.getTime() - (9 * 60 * 60 * 1000)); // UTC로 변환
+      const thisMonthEnd = new Date(thisMonthEndKst.getTime() - (9 * 60 * 60 * 1000)); // UTC로 변환
+      return { startDate: thisMonthStart, endDate: thisMonthEnd };
     
     case 'lastMonth':
-      const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      // 지난 달 1일 00:00:00 KST ~ 마지막 날 23:59:59 KST
+      const lastMonthStartKst = new Date(kstNow.getFullYear(), kstNow.getMonth() - 1, 1);
+      const lastMonthEndKst = new Date(kstNow.getFullYear(), kstNow.getMonth(), 0, 23, 59, 59, 999);
+      const lastMonthStart = new Date(lastMonthStartKst.getTime() - (9 * 60 * 60 * 1000)); // UTC로 변환
+      const lastMonthEnd = new Date(lastMonthEndKst.getTime() - (9 * 60 * 60 * 1000)); // UTC로 변환
       return { startDate: lastMonthStart, endDate: lastMonthEnd };
     
     case 'custom':
-      return {
-        startDate: filter.startDate || today,
-        endDate: filter.endDate || today
-      };
+      if (filter.startDate && filter.endDate) {
+        // 사용자 정의 날짜도 한국 시간 기준으로 처리
+        const customStart = new Date(filter.startDate.getTime() - (9 * 60 * 60 * 1000)); // UTC로 변환
+        const customEnd = new Date(filter.endDate.getTime() - (9 * 60 * 60 * 1000) + (24 * 60 * 60 * 1000) - 1); // UTC로 변환
+        return { startDate: customStart, endDate: customEnd };
+      }
+      // fallback to today
+      const fallbackStart = new Date(kstToday.getTime() - (9 * 60 * 60 * 1000));
+      const fallbackEnd = new Date(fallbackStart.getTime() + (24 * 60 * 60 * 1000) - 1);
+      return { startDate: fallbackStart, endDate: fallbackEnd };
     
     default:
-      return { startDate: today, endDate: today };
+      // 기본값: 이번 주
+      const defaultWeekStartKst = new Date(kstToday);
+      defaultWeekStartKst.setDate(kstToday.getDate() - kstToday.getDay());
+      const defaultStart = new Date(defaultWeekStartKst.getTime() - (9 * 60 * 60 * 1000));
+      const defaultEnd = new Date(defaultStart.getTime() + (7 * 24 * 60 * 60 * 1000) - 1);
+      return { startDate: defaultStart, endDate: defaultEnd };
   }
 }
 
@@ -393,30 +450,12 @@ function AdminDashboard() {
   const [memoValues, setMemoValues] = useState<Record<string, string>>({});
   const [savingMemo, setSavingMemo] = useState<string | null>(null);
 
-  // Phase 3: 메뉴 섹션 정의
-  const menuSections: MenuSection[] = [
-    {
-      id: 'statistics',
-      label: '통계 현황',
-      icon: BarChart3,
-      description: '오늘/주/월별 신청 현황'
-    },
-    {
-      id: 'charts', 
-      label: '차트 분석',
-      icon: PieChart,
-      description: '취업상태별, 지역별 분포'
-    },
-    {
-      id: 'applications',
-      label: '신청 목록',
-      icon: FileText,
-      description: '상세 신청 내역 관리'
-    }
-  ];
+  // 자동 새로고침 필터 리셋 문제 해결: 최신 필터 상태를 항상 참조
+  const dateFilterRef = useRef<DateFilter>(dateFilter);
+  dateFilterRef.current = dateFilter;
 
-  // 데이터 페칭 함수 (날짜 필터 적용)
-  const fetchDashboardData = async (isRefresh = false, filter?: DateFilter) => {
+  // 데이터 페칭 함수 (날짜 필터 적용) - 자동 새로고침 최적화
+  const fetchDashboardData = useCallback(async (isRefresh = false, filter?: DateFilter) => {
     try {
       if (isRefresh) {
         setRefreshing(true);
@@ -429,7 +468,8 @@ function AdminDashboard() {
         ? 'loanbrothers_test' 
         : 'loanbrothers';
 
-      const currentFilter = filter || dateFilter;
+      // 자동 새로고침시 최신 필터 상태 사용, 수동 호출시 전달받은 필터 우선
+      const currentFilter = filter || dateFilterRef.current;
       const { startDate, endDate } = getDateRange(currentFilter);
 
       // 병렬로 데이터 가져오기 (날짜 필터 적용)
@@ -501,7 +541,7 @@ function AdminDashboard() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []); // 의존성 배열: 빈 배열로 함수 재생성 방지
 
   // 상태 변경 함수
   const handleStatusChange = async (applicationId: string | number, newStatus: CounselStatus) => {
@@ -578,7 +618,8 @@ function AdminDashboard() {
         '대출금액': formatCurrency(app.loan_amount),
         '취업상태': app.employed ? '재직중' : '미취업',
         '신청일시': new Date(app.created_at).toLocaleString('ko-KR'),
-        '상태': getStatusLabel(app.status)
+        '상태': getStatusLabel(app.status),
+        '메모': app.memo || '' // Phase 3: 메모 컬럼 추가
       }));
 
       // 워크북 생성
@@ -593,7 +634,8 @@ function AdminDashboard() {
         { wch: 15 },  // 대출금액
         { wch: 10 },  // 취업상태
         { wch: 20 },  // 신청일시
-        { wch: 10 }   // 상태
+        { wch: 10 },  // 상태
+        { wch: 30 }   // 메모
       ];
       worksheet['!cols'] = colWidths;
 
@@ -611,7 +653,19 @@ function AdminDashboard() {
     }
   };
 
-  // Phase 3: Intersection Observer로 활성 섹션 감지
+  useEffect(() => {
+    fetchDashboardData();
+    
+    // 자동 새로고침 - 현재 필터 상태를 유지하면서 30초마다 실행
+    const interval = setInterval(() => {
+      // dateFilterRef.current를 사용하여 최신 필터 상태 전달
+      fetchDashboardData(true);
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, [fetchDashboardData]); // fetchDashboardData를 의존성에 추가
+
+  // Phase 3: Intersection Observer로 현재 섹션 감지
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -624,36 +678,32 @@ function AdminDashboard() {
       { threshold: 0.3 }
     );
 
-    const sections = ['statistics', 'charts', 'applications'];
-    sections.forEach((id) => {
-      const element = document.getElementById(id);
-      if (element) observer.observe(element);
+    // 각 섹션 관찰 등록
+    menuSections.forEach(section => {
+      const element = document.getElementById(section.id);
+      if (element) {
+        observer.observe(element);
+      }
     });
 
     return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    fetchDashboardData();
-    // 30초마다 자동 새로고침
-    const interval = setInterval(() => fetchDashboardData(true), 30000);
-    return () => clearInterval(interval);
-  }, []);
+  }, [data]); // data가 변경될 때마다 재설정
 
   const handleRefresh = () => {
     fetchDashboardData(true);
   };
 
-  // Phase 3: 스크롤 함수
+  // Phase 3: 사이드바 메뉴 함수들
   const handleScrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
+      setActiveSection(sectionId);
       setSidebarOpen(false); // 모바일에서 메뉴 닫기
     }
   };
 
-  // Phase 3: 메모 관리 함수들
+  // Phase 3: 메모 관련 함수들
   const handleMemoEdit = (applicationId: string, currentMemo?: string) => {
     setEditingMemo(applicationId);
     setMemoValues(prev => ({ 
@@ -663,16 +713,19 @@ function AdminDashboard() {
   };
 
   const handleMemoSave = async (applicationId: string) => {
+    const memo = memoValues[applicationId];
+    if (memo === undefined) return;
+
     try {
       setSavingMemo(applicationId);
-      
+
       const tableName = process.env.NODE_ENV === 'test' || process.env.VERCEL_ENV === 'preview' 
         ? 'loanbrothers_test' 
         : 'loanbrothers';
 
       const { error } = await supabase
         .from(tableName)
-        .update({ memo: memoValues[applicationId] || null })
+        .update({ memo: memo.trim() })
         .eq('id', applicationId);
 
       if (error) throw error;
@@ -680,16 +733,14 @@ function AdminDashboard() {
       // UI 즉시 업데이트
       if (data) {
         const updatedApplications = data.applications.map(app => 
-          app.id === Number(applicationId) ? { ...app, memo: memoValues[applicationId] || null } : app
+          app.id === applicationId ? { ...app, memo: memo.trim() } : app
         );
         setData({ ...data, applications: updatedApplications });
       }
 
       setEditingMemo(null);
-      setMemoValues({});
-
     } catch (err) {
-      console.error('메모 저장 에러:', err);
+      console.error('메모 저장 실패:', err);
       setError('메모 저장에 실패했습니다. 다시 시도해주세요.');
     } finally {
       setSavingMemo(null);
@@ -766,12 +817,15 @@ function AdminDashboard() {
                   <Skeleton key={i} className="h-12 w-full" />
                 ))}
               </div>
-            </CardContent>
-          </Card>
+                      </CardContent>
+        </Card>
+            </div>
+          </div>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   // 에러 상태
   if (error && !data) {
@@ -812,9 +866,7 @@ function AdminDashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Phase 3: 사이드바 메뉴 */}
-      <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out ${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      } lg:translate-x-0 lg:static lg:shadow-none lg:border-r`}>
+      <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:shadow-none lg:border-r`}>
         <div className="flex flex-col h-full">
           {/* 사이드바 헤더 */}
           <div className="flex items-center justify-between p-4 border-b">
@@ -898,24 +950,24 @@ function AdminDashboard() {
                   </p>
                 </div>
               </div>
-              <Button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                variant="outline"
-              >
-                {refreshing ? (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    새로고침 중...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    새로고침
-                  </>
-                )}
-              </Button>
-            </div>
+          <Button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            variant="outline"
+          >
+            {refreshing ? (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                새로고침 중...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                새로고침
+              </>
+            )}
+          </Button>
+        </div>
 
         {/* 에러 알림 (데이터가 있는 상태에서의 에러) */}
         {error && (
@@ -1138,19 +1190,19 @@ function AdminDashboard() {
             ) : (
               <div className="overflow-x-auto">
                 <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {/* PRD Phase 2: ID 컬럼 제거 */}
-                      <TableHead>나이</TableHead>
-                      <TableHead>연락처</TableHead>
-                      <TableHead>지역</TableHead>
-                      <TableHead>대출금액</TableHead>
-                      <TableHead>취업상태</TableHead>
-                      <TableHead>신청일시</TableHead>
-                      <TableHead>상태</TableHead>
-                      <TableHead className="w-64">메모</TableHead>
-                    </TableRow>
-                  </TableHeader>
+                                      <TableHeader>
+                      <TableRow>
+                        {/* PRD Phase 2: ID 컬럼 제거 */}
+                        <TableHead>나이</TableHead>
+                        <TableHead>연락처</TableHead>
+                        <TableHead>지역</TableHead>
+                        <TableHead>대출금액</TableHead>
+                        <TableHead>취업상태</TableHead>
+                        <TableHead>신청일시</TableHead>
+                        <TableHead>상태</TableHead>
+                        <TableHead className="w-48">메모</TableHead>
+                      </TableRow>
+                    </TableHeader>
                   <TableBody>
                     {data.applications.map((application) => (
                       <TableRow key={application.id}>
@@ -1231,15 +1283,19 @@ function AdminDashboard() {
                         </TableCell>
 
                         {/* Phase 3: 메모 컬럼 */}
-                        <TableCell className="w-64">
+                        <TableCell>
                           {editingMemo === String(application.id) ? (
-                            <div className="flex gap-2">
+                            <div className="flex items-center gap-2">
                               <textarea
                                 value={memoValues[String(application.id)] || ''}
-                                onChange={(e) => setMemoValues(prev => ({
-                                  ...prev,
-                                  [String(application.id)]: e.target.value
+                                onChange={(e) => setMemoValues(prev => ({ 
+                                  ...prev, 
+                                  [String(application.id)]: e.target.value 
                                 }))}
+                                placeholder="메모를 입력하세요..."
+                                className="flex-1 min-w-0 p-2 text-sm border rounded resize-none"
+                                rows={2}
+                                maxLength={500}
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter' && !e.shiftKey) {
                                     e.preventDefault();
@@ -1248,15 +1304,11 @@ function AdminDashboard() {
                                     handleMemoCancel();
                                   }
                                 }}
-                                placeholder="메모 입력 (최대 500자)"
-                                maxLength={500}
-                                rows={2}
-                                className="flex-1 text-sm border rounded px-2 py-1 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                autoFocus
                               />
                               <div className="flex flex-col gap-1">
                                 <Button
                                   size="sm"
-                                  variant="ghost"
                                   onClick={() => handleMemoSave(String(application.id))}
                                   disabled={savingMemo === String(application.id)}
                                   className="h-6 w-6 p-0"
@@ -1264,28 +1316,37 @@ function AdminDashboard() {
                                   {savingMemo === String(application.id) ? (
                                     <RefreshCw className="h-3 w-3 animate-spin" />
                                   ) : (
-                                    <Save className="h-3 w-3 text-green-600" />
+                                    <Save className="h-3 w-3" />
                                   )}
                                 </Button>
                                 <Button
                                   size="sm"
-                                  variant="ghost"
+                                  variant="outline"
                                   onClick={handleMemoCancel}
                                   className="h-6 w-6 p-0"
                                 >
-                                  <X className="h-3 w-3 text-gray-600" />
+                                  <X className="h-3 w-3" />
                                 </Button>
                               </div>
                             </div>
                           ) : (
-                            <div className="group cursor-pointer" onClick={() => handleMemoEdit(String(application.id), application.memo || '')}>
-                              <div className="flex items-center gap-2 min-h-[32px]">
-                                <MessageSquare className="h-4 w-4 text-gray-400 group-hover:text-blue-500" />
-                                <span className="text-sm text-gray-600 group-hover:text-gray-900 truncate">
-                                  {application.memo || '메모 추가...'}
-                                </span>
-                                <Edit3 className="h-3 w-3 text-gray-400 opacity-0 group-hover:opacity-100" />
-                              </div>
+                            <div 
+                              className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                              onClick={() => handleMemoEdit(String(application.id), application.memo)}
+                            >
+                              {application.memo ? (
+                                <>
+                                  <MessageSquare className="h-4 w-4 text-blue-500" />
+                                  <span className="text-sm text-gray-700 truncate max-w-32">
+                                    {application.memo}
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <Edit3 className="h-4 w-4 text-gray-400" />
+                                  <span className="text-sm text-gray-400">메모 추가</span>
+                                </>
+                              )}
                             </div>
                           )}
                         </TableCell>
@@ -1297,8 +1358,6 @@ function AdminDashboard() {
             )}
           </CardContent>
         </Card>
-          </div>
-        </div>
       </div>
     </div>
   );

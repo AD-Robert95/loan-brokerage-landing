@@ -1,7 +1,7 @@
 "use client";
 
 import AuthWrapper from './auth-wrapper';
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -383,6 +383,10 @@ function AdminDashboard() {
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
+
+  // 자동 새로고침 필터 리셋 문제 해결: 최신 필터 상태를 항상 참조
+  const dateFilterRef = useRef<DateFilter>(dateFilter);
+  dateFilterRef.current = dateFilter;
 
   // Phase 3: 사이드바 메뉴 상태
   const [sidebarOpen, setSidebarOpen] = useState(false);
